@@ -79,13 +79,44 @@ This will:
 - Print a configuration summary
 - Verify API credentials are set (warns if missing)
 
-### Future Entrypoints
+### Part C2 – Evaluation
 
-Once implemented, you'll be able to run:
-- **Training:** `python scripts/train.py`
-- **Backtesting:** `python scripts/backtest.py`
-- **Live Trading:** `python scripts/live_trade.py`
-- **GUI:** `streamlit run gui/app.py`
+Evaluate different policies on historical data:
+
+**Random policy:**
+```bash
+python scripts/eval_policy.py --policy random --data_path data/btc_synthetic.csv --start 2025-12-10 --end 2025-12-10
+```
+
+**Baseline policy:**
+```bash
+python scripts/eval_policy.py --policy baseline --data_path data/btc_synthetic.csv --start 2025-12-10 --end 2025-12-10
+```
+
+**DQN policy (requires trained checkpoint):**
+```bash
+python scripts/eval_policy.py --policy dqn --checkpoint models/dqn_last.pt --data_path data/btc_synthetic.csv --start 2025-12-10 --end 2025-12-10
+```
+
+Evaluation outputs:
+- `backtest/results/eval_<policy>_equity_curve.csv` - Equity over time
+- `backtest/results/eval_<policy>_daily_metrics.csv` - Per-day metrics
+- `backtest/results/eval_<policy>_equity_curve.png` - Equity curve plot
+- `backtest/results/eval_metrics.csv` - Summary metrics for all policies
+
+### Training
+
+Train a DQN agent:
+```bash
+python scripts/train_dqn.py --data_path data/btc_synthetic.csv --start 2025-12-10 --end 2025-12-10 --total_steps 2000
+```
+
+### Backtesting
+
+Run multi-day backtest:
+```bash
+python backtest/run_backtest.py --data_path data/btc_synthetic.csv --start 2025-12-01 --end 2025-12-10 --policy baseline
+```
 
 ## API Keys
 

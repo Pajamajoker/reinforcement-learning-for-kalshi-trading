@@ -12,6 +12,10 @@ from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
+import matplotlib
+
+# Use non-interactive backend for headless environments
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 # Add project root to path
