@@ -1,0 +1,67 @@
+# Kalshi RL Trading Agent Configuration
+
+# Trading window hours (24-hour format)
+trading:
+  window_start: 9  # 9 AM
+  window_end: 16    # 4 PM
+  timezone: "America/New_York"
+
+# Risk management limits
+risk:
+  max_position_size: 1000  # Maximum position size in contracts
+  max_daily_loss: 500      # Maximum daily loss in dollars
+  max_drawdown: 0.10       # Maximum drawdown as fraction (10%)
+
+# Logging configuration
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR
+  console: true
+  file: true
+  file_path: "logs/kalshi_agent.log"
+  rotation: "10 MB"
+  retention: "7 days"
+
+# File paths
+paths:
+  data_dir: "data"
+  logs_dir: "logs"
+  models_dir: "models"
+
+# Agent configuration
+agent:
+  model_type: "ppo"  # Placeholder for future model types
+  learning_rate: 0.0003
+  batch_size: 64
+
+# RL training configuration
+rl:
+  learning_rate: 0.001  # Learning rate for DQN
+  gamma: 0.99  # Discount factor
+  replay_buffer_size: 50000  # Size of replay buffer
+  batch_size: 64  # Batch size for training
+  target_update_freq: 500  # Frequency of target network updates (steps)
+  epsilon_start: 1.0  # Initial epsilon for exploration
+  epsilon_end: 0.05  # Final epsilon after decay
+  epsilon_decay_steps: 5000  # Steps to decay epsilon
+  hidden_sizes: [128, 128]  # Hidden layer sizes for Q-network
+  warmup_steps: 500  # Steps before training starts
+  total_steps: 2000  # Default total training steps
+
+# Backtest configuration
+backtest:
+  initial_capital: 10000
+  spread: 0.02  # Half-spread (2% total spread)
+  fee_per_contract: 0.01  # Fee per contract in dollars
+  lookback_minutes: 60  # Minutes to look back for volatility estimation
+  strategy:
+    buy_threshold: 0.55  # Buy YES if prob > this
+    sell_threshold: 0.45  # Sell YES if prob < this (currently disabled)
+  data_path: "data/btc_synthetic.csv"  # Default path to BTC data
+  # Environment settings
+  observation_window: 60  # Number of minutes in observation
+  turnover_penalty: 0.001  # Penalty per contract traded
+  random_seed: 42  # Random seed for reproducibility
+  # Multi-day backtest settings (optional)
+  start_date: null  # Start date for backtest (YYYY-MM-DD)
+  end_date: null  # End date for backtest (YYYY-MM-DD)
+
