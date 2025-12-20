@@ -21,6 +21,27 @@ from src.common.config import get_config
 from src.common.logger import setup_logger, get_logger
 
 
+def get_friction_params(friction_mode: str, config) -> tuple:
+    """
+    Get friction parameters based on mode.
+
+    Args:
+        friction_mode: 'realistic' or 'low_friction'
+        config: Config object with backtest settings
+
+    Returns:
+        Tuple of (spread, fee_per_contract, turnover_penalty)
+    """
+    if friction_mode == "low_friction":
+        return (0.0, 0.0, 0.0)
+    else:  # realistic
+        return (
+            config.backtest.spread,
+            config.backtest.fee_per_contract,
+            config.backtest.turnover_penalty,
+        )
+
+
 def train_dqn(
     data_path: str,
     start_date: str,
@@ -30,6 +51,7 @@ def train_dqn(
     save_dir: str = "models",
     log_csv: str = "logs/dqn_train_metrics.csv",
     checkpoint_every: int = 1000,
+    friction_mode: str = "realistic",
 ) -> None:
     """
     Train DQN agent.
@@ -55,6 +77,10 @@ def train_dqn(
     # Use config defaults if not provided
     if seed is None:
         seed = config.backtest.random_seed
+
+    # Get friction parameters
+    spread, fee_per_contract, turnover_penalty = get_friction_params(friction_mode, config)
+    logger.info(f"Friction mode: {friction_mode} (spread={spread}, fee={fee_per_contract}, turnover_penalty={turnover_penalty})")
 
     # Set seeds
     import torch
@@ -112,7 +138,9 @@ def train_dqn(
                     day_df=day_df,
                     day_utc=day_str,
                     observation_window=config.backtest.observation_window,
-                    turnover_penalty=config.backtest.turnover_penalty,
+                    turnover_penalty=turnover_penalty,
+                    spread=spread,
+                    fee_per_contract=fee_per_contract,
                     seed=seed,
                 )
 
@@ -273,6 +301,13 @@ def main():
         default=1000,
         help="Frequency of checkpoint saves (in steps)",
     )
+    parser.add_argument(
+        "--friction_mode",
+        type=str,
+        choices=["realistic", "low_friction"],
+        default="realistic",
+        help="Friction mode: realistic (default) or low_friction (spread=0, fee=0, turnover_penalty=0)",
+    )
 
     args = parser.parse_args()
 
@@ -294,6 +329,7 @@ def main():
         save_dir=args.save_dir,
         log_csv=args.log_csv,
         checkpoint_every=args.checkpoint_every,
+        friction_mode=args.friction_mode,
     )
 
 

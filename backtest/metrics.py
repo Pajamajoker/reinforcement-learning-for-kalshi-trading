@@ -46,3 +46,4 @@ def calculate_metrics(equity_curve: pd.Series) -> Dict[str, float]:
         "sharpe_ratio": sharpe_ratio,
     }
 
+

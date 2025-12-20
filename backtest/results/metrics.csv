@@ -1,2 +1,2 @@
 policy,start_date,end_date,days_tested,total_trades,total_wins,total_losses,win_rate,total_return,max_drawdown,sharpe_ratio
-baseline,2025-12-10,2025-12-10,1,0,0,0,0.0,0.0,0.0,0.0
+baseline,2025-12-14,2025-12-20,7,0,0,0,0.0,0.0,0.0,0.0
