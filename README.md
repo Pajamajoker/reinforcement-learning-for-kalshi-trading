@@ -224,7 +224,3 @@ python scripts/test_kalshi_connection.py
 - All backtest results go to `backtest/results/`
 - The system uses timezone-aware UTC timestamps throughout
 - Synthetic data is available in `data/btc_synthetic.csv` for testing
-
-## License
-
-[Add your license here]
