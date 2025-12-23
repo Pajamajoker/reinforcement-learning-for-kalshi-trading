@@ -125,6 +125,83 @@ def test_eval_baseline_policy():
         assert "baseline" in summary_df["policy"].values
 
 
+def test_eval_baseline_multi_day():
+    """Test evaluating baseline policy over multiple days."""
+    # Check if synthetic data exists
+    data_path = Path("data/btc_synthetic.csv")
+    if not data_path.exists():
+        pytest.skip("Synthetic data not found, skipping multi-day evaluation test")
+
+    # Create temporary directory for outputs
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_dir = Path(tmpdir)
+
+        # Evaluate baseline policy over 3 days
+        start_date = "2025-12-10"
+        end_date = "2025-12-12"
+        results = evaluate_policy(
+            policy_name="baseline",
+            data_path=str(data_path),
+            start_date=start_date,
+            end_date=end_date,
+            seed=42,
+            out_dir=str(out_dir),
+        )
+
+        # Check results
+        assert results is not None
+        assert results["policy"] == "baseline"
+        assert results["start_date"] == start_date
+        assert results["end_date"] == end_date
+        assert results["days_tested"] == 3, f"Expected 3 days, got {results['days_tested']}"
+        
+        # Check daily metrics has rows for all days
+        daily_metrics = results["daily_metrics"]
+        assert len(daily_metrics) == 3, f"Expected 3 daily metric rows, got {len(daily_metrics)}"
+        assert "day" in daily_metrics.columns
+        
+        # Check equity curve has day and step_in_day columns
+        if "equity_curve_df" in results:
+            equity_df = results["equity_curve_df"]
+            assert "day" in equity_df.columns
+            assert "step_in_day" in equity_df.columns
+            assert "equity" in equity_df.columns
+
+        # Save results
+        try:
+            save_evaluation_results(results, out_dir, "baseline")
+        except Exception:
+            pass
+        
+        update_summary_metrics(results, out_dir)
+
+        # Check that files were created
+        equity_csv = out_dir / "eval_baseline_equity_curve.csv"
+        daily_csv = out_dir / "eval_baseline_daily_metrics.csv"
+        summary_csv = out_dir / "eval_metrics.csv"
+        
+        assert equity_csv.exists(), "Equity curve CSV should be created"
+        assert daily_csv.exists(), "Daily metrics CSV should be created"
+        assert summary_csv.exists(), "Summary metrics CSV should be created"
+        
+        # Check equity curve CSV has day and step_in_day columns
+        equity_df = pd.read_csv(equity_csv)
+        assert "day" in equity_df.columns or "step" in equity_df.columns  # Allow backward compat
+        assert "equity" in equity_df.columns
+        
+        # Check daily metrics CSV
+        daily_df = pd.read_csv(daily_csv)
+        assert len(daily_df) == 3, f"Expected 3 rows in daily metrics, got {len(daily_df)}"
+        assert "day" in daily_df.columns
+        
+        # Check summary metrics
+        summary_df = pd.read_csv(summary_csv)
+        baseline_row = summary_df[summary_df["policy"] == "baseline"].iloc[0]
+        assert baseline_row["days_tested"] == 3
+        assert baseline_row["start_date"] == start_date
+        assert baseline_row["end_date"] == end_date
+
+
 def test_eval_dqn_policy():
     """Test evaluating DQN policy (requires checkpoint)."""
     # Check if synthetic data exists

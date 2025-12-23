@@ -164,6 +164,8 @@ def evaluate_policy(
 
     # Track results
     all_equity = []
+    all_days = []  # Track day for each equity point
+    all_steps_in_day = []  # Track step_in_day for each equity point
     daily_metrics = []
     all_trades = []
     all_wins = []
@@ -179,7 +181,32 @@ def evaluate_policy(
             # Get day slice
             day_df = get_day_slice(df, day_str)
             if day_df.empty:
-                logger.warning(f"No data for {day_str}, skipping")
+                logger.warning(f"No data for {day_str}, creating empty metrics row")
+                # Create empty metrics row for this day
+                initial_capital = config.backtest.initial_capital
+                daily_metrics.append(
+                    {
+                        "day": day_str,
+                        "initial_equity": initial_capital,
+                        "final_equity": initial_capital,
+                        "return": 0.0,
+                        "trades": 0,
+                        "wins": 0,
+                        "losses": 0,
+                        "win_rate": 0.0,
+                        "actions_hold": 0,
+                        "actions_buy": 0,
+                        "actions_sell": 0,
+                        "executed_trades": 0,
+                    }
+                )
+                # Add single equity point for this day (no trading)
+                all_equity.append(initial_capital)
+                all_days.append(day_str)
+                all_steps_in_day.append(0)
+                all_trades.append(0)
+                all_wins.append(0)
+                all_losses.append(0)
                 continue
 
             # Create environment
@@ -217,6 +244,8 @@ def evaluate_policy(
 
             # Episode metrics
             episode_equity = [info["equity"]]
+            episode_days = [day_str]  # Track day for each equity point
+            episode_steps_in_day = [0]  # Track step_in_day (0 = initial state)
             episode_trades = 0
             episode_wins = 0
             episode_losses = 0
@@ -251,8 +280,10 @@ def evaluate_policy(
                 obs, reward, terminated, truncated, info = env.step(action)
                 done = terminated or truncated
 
-                # Track equity
+                # Track equity with day and step info
                 episode_equity.append(info["equity"])
+                episode_days.append(day_str)
+                episode_steps_in_day.append(step_count + 1)  # +1 because we already recorded step 0
 
                 # Track executed trades (actual trades that happened)
                 action_taken = info.get("action_taken", "HOLD")
@@ -303,6 +334,8 @@ def evaluate_policy(
 
             # Track overall metrics
             all_equity.extend(episode_equity)
+            all_days.extend(episode_days)
+            all_steps_in_day.extend(episode_steps_in_day)
             all_trades.append(episode_trades)
             all_wins.append(episode_wins)
             all_losses.append(episode_losses)
@@ -330,7 +363,21 @@ def evaluate_policy(
         return {}
 
     equity_series = pd.Series(all_equity)
+    
+    # Calculate metrics from full equity curve
     overall_metrics = calculate_metrics(equity_series)
+    
+    # Calculate sharpe ratio from daily returns (not step-by-step)
+    daily_metrics_df = pd.DataFrame(daily_metrics)
+    if len(daily_metrics_df) > 1 and "return" in daily_metrics_df.columns:
+        daily_returns = daily_metrics_df["return"]
+        if daily_returns.std() > 0:
+            # Annualized Sharpe: mean return / std * sqrt(252 trading days)
+            sharpe_ratio = (daily_returns.mean() / daily_returns.std()) * np.sqrt(252)
+        else:
+            sharpe_ratio = 0.0
+    else:
+        sharpe_ratio = overall_metrics["sharpe_ratio"]  # Fallback to step-by-step
 
     # Overall statistics
     total_trades = sum(all_trades)
@@ -339,14 +386,24 @@ def evaluate_policy(
     win_rate = total_wins / (total_wins + total_losses) if (total_wins + total_losses) > 0 else 0.0
     avg_trades_per_day = np.mean(all_trades) if all_trades else 0.0
 
+    # Store equity curve with metadata
+    equity_curve_df = pd.DataFrame({
+        "day": all_days,
+        "step_in_day": all_steps_in_day,
+        "equity": all_equity,
+    })
+
+    # Ensure days_tested matches the requested range (even if some days had no data)
+    requested_days_tested = len(days_str)
+    
     results = {
         "policy": policy_name,
         "start_date": start_date,
         "end_date": end_date,
-        "days_tested": len(days_str),
+        "days_tested": requested_days_tested,
         "total_return": overall_metrics["total_return"],
         "max_drawdown": overall_metrics["max_drawdown"],
-        "sharpe_ratio": overall_metrics["sharpe_ratio"],
+        "sharpe_ratio": sharpe_ratio,
         "total_trades": total_trades,
         "avg_trades_per_day": avg_trades_per_day,
         "win_rate": win_rate,
@@ -354,7 +411,8 @@ def evaluate_policy(
         "actions_buy": total_actions["BUY"],
         "actions_sell": total_actions["SELL"],
         "executed_trades": total_executed_trades,
-        "equity_curve": equity_series,
+        "equity_curve": equity_series,  # Keep for backward compatibility
+        "equity_curve_df": equity_curve_df,  # New: with day and step_in_day
         "daily_metrics": pd.DataFrame(daily_metrics),
     }
 
@@ -381,13 +439,17 @@ def save_evaluation_results(results: Dict[str, Any], out_dir: Path, policy_name:
     out_dir.mkdir(parents=True, exist_ok=True)
     logger = get_logger(__name__)
 
-    # Save equity curve CSV
-    equity_df = pd.DataFrame(
-        {
-            "step": range(len(results["equity_curve"])),
-            "equity": results["equity_curve"].values,
-        }
-    )
+    # Save equity curve CSV with day and step_in_day columns
+    if "equity_curve_df" in results:
+        equity_df = results["equity_curve_df"].copy()
+    else:
+        # Fallback for backward compatibility
+        equity_df = pd.DataFrame(
+            {
+                "step": range(len(results["equity_curve"])),
+                "equity": results["equity_curve"].values,
+            }
+        )
     equity_path = out_dir / f"eval_{policy_name}_equity_curve.csv"
     equity_df.to_csv(equity_path, index=False)
     logger.info(f"Saved equity curve to {equity_path}")
@@ -444,7 +506,7 @@ def update_summary_metrics(results: Dict[str, Any], out_dir: Path) -> None:
     # end_date = max(day)
     end_date = daily_metrics_df["day"].max()
     
-    # days_tested = number of unique days
+    # days_tested = number of unique days (should match requested range)
     days_tested = len(daily_metrics_df)
     
     # total_trades = sum(trades)
@@ -467,16 +529,21 @@ def update_summary_metrics(results: Dict[str, Any], out_dir: Path) -> None:
     else:
         total_return = 0.0
     
-    # max_drawdown = min((final_equity - initial_equity_first_day) / initial_equity_first_day)
-    # This is the minimum return across all days (most negative)
-    if initial_equity_first_day > 0:
-        daily_returns_from_start = (daily_metrics_df["final_equity"] - initial_equity_first_day) / initial_equity_first_day
-        max_drawdown = abs(min(daily_returns_from_start.min(), 0.0))  # Only negative returns count as drawdown
+    # max_drawdown = computed from equity curve across the WHOLE range (not per-day reset)
+    # Use the full equity curve from results
+    equity_curve = results.get("equity_curve", pd.Series())
+    if len(equity_curve) > 0 and initial_equity_first_day > 0:
+        # Calculate drawdown from full equity curve
+        running_max = equity_curve.expanding().max()
+        drawdown = (equity_curve - running_max) / running_max
+        max_drawdown = abs(drawdown.min())
     else:
         max_drawdown = 0.0
     
-    # sharpe_ratio = safe placeholder (0.0 if not computed, or use from results if available)
+    # sharpe_ratio = computed from daily returns across the range (handle <2 days gracefully)
     sharpe_ratio = results.get("sharpe_ratio", 0.0)
+    if days_tested < 2:
+        sharpe_ratio = 0.0  # Need at least 2 days for meaningful Sharpe
     
     # action counts = sum from daily metrics
     actions_hold = daily_metrics_df["actions_hold"].sum() if "actions_hold" in daily_metrics_df.columns else results.get("actions_hold", 0)

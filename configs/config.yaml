@@ -56,7 +56,7 @@ backtest:
   strategy:
     buy_threshold: 0.55  # Buy YES if prob > this
     sell_threshold: 0.45  # Sell YES if prob < this (currently disabled)
-  data_path: "data/btc_synthetic.csv"  # Default path to BTC data
+  data_path: "data/btc_1m_last7d.csv"  # Default path to BTC data
   # Environment settings
   observation_window: 60  # Number of minutes in observation
   turnover_penalty: 0.001  # Penalty per contract traded

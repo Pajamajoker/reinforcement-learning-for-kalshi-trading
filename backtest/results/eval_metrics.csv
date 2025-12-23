@@ -1,3 +1,3 @@
 policy,start_date,end_date,days_tested,total_trades,total_wins,total_losses,win_rate,total_return,max_drawdown,sharpe_ratio,actions_hold,actions_buy,actions_sell,executed_trades
-baseline,2025-12-14,2025-12-14,1,0,0,0,0.0,0.0,0.0,0.0,16,0,0,0
-dqn,2025-12-14,2025-12-14,1,8,6,2,0.75,0.00021562089571107207,0.0,7.589722468789504,3,8,5,8
+baseline,2025-12-14,2025-12-20,7,0,0,0,0.0,0.0,0.0,0.0,112,0,0,0
+dqn,2025-12-14,2025-12-20,7,54,48,6,0.8888888888888888,0.00018905631388061012,0.0003363126706419312,75.76106330646911,21,54,37,54

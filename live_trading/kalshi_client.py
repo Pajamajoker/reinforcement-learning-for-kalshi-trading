@@ -235,3 +235,108 @@ class KalshiClient:
         response = self._make_request("GET", "/markets", params=params)
         return response
 
+    def get_market(self, ticker: str) -> Dict[str, Any]:
+        """
+        Fetch details for a specific market.
+
+        Args:
+            ticker: Market ticker symbol.
+
+        Returns:
+            Dictionary containing market details including orderbook.
+        """
+        self.logger.info(f"Fetching market details for {ticker}...")
+        response = self._make_request_with_retry("GET", f"/markets/{ticker}")
+        return response
+
+    def get_orderbook(self, ticker: str) -> Dict[str, Any]:
+        """
+        Fetch orderbook for a specific market.
+
+        Args:
+            ticker: Market ticker symbol.
+
+        Returns:
+            Dictionary containing orderbook data (bids/asks).
+        """
+        self.logger.info(f"Fetching orderbook for {ticker}...")
+        response = self._make_request_with_retry("GET", f"/markets/{ticker}/orderbook")
+        return response
+
+    def place_order(
+        self,
+        ticker: str,
+        side: str,
+        action: str,
+        count: int,
+        price: Optional[int] = None,
+        order_type: str = "limit",
+    ) -> Dict[str, Any]:
+        """
+        Place an order on Kalshi with retry logic.
+
+        Args:
+            ticker: Market ticker symbol.
+            side: Order side ("yes" or "no").
+            action: Order action ("buy" or "sell").
+            count: Number of contracts.
+            price: Price in cents (0-100). Required for limit orders.
+            order_type: Order type ("limit" or "market"). Default "limit".
+
+        Returns:
+            Dictionary containing order response including order_id and status.
+        """
+        self.logger.info(f"Placing {action} {side} order for {count} contracts of {ticker} at price {price}...")
+        
+        order_data = {
+            "ticker": ticker,
+            "side": side,
+            "action": action,
+            "count": count,
+            "type": order_type,
+        }
+        
+        if order_type == "limit" and price is not None:
+            order_data["price"] = price
+        
+        response = self._make_request_with_retry("POST", "/portfolio/orders", data=order_data)
+        return response
+
+    def _make_request_with_retry(
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        data: Optional[Dict[str, Any]] = None,
+        max_retries: int = 3,
+    ) -> Dict[str, Any]:
+        """
+        Make an authenticated request with exponential backoff retry logic.
+
+        Args:
+            method: HTTP method (GET, POST, etc.).
+            path: API endpoint path.
+            params: Query parameters for GET requests.
+            data: Request body data for POST/PUT requests.
+            max_retries: Maximum number of retry attempts.
+
+        Returns:
+            JSON response as dictionary.
+
+        Raises:
+            requests.HTTPError: If all retry attempts fail.
+        """
+        for attempt in range(max_retries):
+            try:
+                return self._make_request(method, path, params=params, data=data)
+            except (requests.exceptions.RequestException, requests.exceptions.HTTPError) as e:
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    self.logger.warning(
+                        f"Request failed (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s: {e}"
+                    )
+                    time.sleep(wait_time)
+                else:
+                    self.logger.error(f"Request failed after {max_retries} attempts: {e}")
+                    raise
+
